@@ -2,48 +2,83 @@ use regex::Regex;
 use std::collections::HashMap;
 advent_of_code::solution!(1);
 
+// Part one of the solution
 pub fn part_one(input: &str) -> Option<u32> {
+    // Compile a regular expression to find digits
     let regex = Regex::new(r"\d").unwrap();
     let mut pairs = Vec::new();
 
+    // Iterate over each line in the input
     for line in input.lines() {
-        let base10: Vec<u32> = regex
+        // Create an iterator that finds all matches of the regex in the line
+        // and attempts to parse each match as a u32
+        let mut iter = regex
             .find_iter(line)
-            .filter_map(|mat| mat.as_str().parse::<u32>().ok())
-            .collect();
+            .filter_map(|mat| mat.as_str().parse::<u32>().ok());
 
-        match base10.len() {
-            0 => continue,
-            1 => pairs.push((base10[0], base10[0])),
-            _ => pairs.push((base10[0], *base10.last().unwrap())),
+        // Determine the first and last numbers in the line
+        match (iter.next(), iter.last()) {
+            // If there's only one number, or no numbers, use it for both first and last
+            (Some(first), None) | (None, Some(first)) => pairs.push((first, first)),
+            // If there are at least two numbers, use the first and last ones
+            (Some(first), Some(last)) => pairs.push((first, last)),
+            // If there are no numbers, skip this line
+            _ => continue,
         }
     }
 
-    log_pairs(&pairs);
-    return Some(sum_pairs_as_digits(&pairs));
+    // Calculate and return the sum of all pairs
+    Some(sum_pairs_as_digits(&pairs))
 }
 
-fn sum_pairs_as_digits(pairs: &[(u32, u32)]) -> u32 {
-    pairs
-        .iter()
-        .map(|(a, b)| {
-            // Concatenate the digits and convert to a single number
-            format!("{}{}", a, b).parse::<u32>().unwrap_or(0)
-        })
-        .sum()
+// Custom iterator to handle overlapping number matches in a string
+struct NumberIterator<'a> {
+    line: &'a str,
+    regex: &'a Regex,
+    number_words: &'a HashMap<&'a str, u32>,
+    start: usize,
 }
 
-fn log_pairs(pairs: &[(u32, u32)]) {
-    // Debugging: print the pairs
-    for (index, (first, last)) in pairs.iter().enumerate() {
-        println!("base10[{}] = ({}, {})", index, first, last);
+impl<'a> NumberIterator<'a> {
+    // Constructor for the iterator
+    fn new(line: &'a str, regex: &'a Regex, number_words: &'a HashMap<&'a str, u32>) -> Self {
+        NumberIterator {
+            line,
+            regex,
+            number_words,
+            start: 0,
+        }
     }
- }    
- 
+}
 
+impl<'a> Iterator for NumberIterator<'a> {
+    type Item = u32;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // Attempt to find the next match in the line, starting from 'start'
+        if let Some(mat) = self.regex.find(&self.line[self.start..]) {
+            // Extract the matched string
+            let match_str = &self.line[self.start..][mat.start()..mat.end()];
+            // Update 'start' to allow for overlapping matches
+            self.start += mat.start() + match_str.chars().next().map_or(0, |_| 1);
+
+            // Convert the match to a number, either by looking it up in the map or parsing it
+            if let Some(&num) = self.number_words.get(match_str) {
+                Some(num)
+            } else {
+                match_str.parse().ok()
+            }
+        } else {
+            // No more matches
+            None
+        }
+    }
+}
+
+// Part two of the solution
 pub fn part_two(input: &str) -> Option<u32> {
     // Map of number words to their numeric values
-    let number_words = [
+    let number_words: HashMap<_, _> = [
         ("zero", 0),
         ("one", 1),
         ("two", 2),
@@ -57,49 +92,48 @@ pub fn part_two(input: &str) -> Option<u32> {
     ]
     .iter()
     .cloned()
-    .collect::<HashMap<_, _>>();
+    .collect();
 
+    // Compile a regular expression to find digits and number words
     let regex = Regex::new(r"\d|zero|one|two|three|four|five|six|seven|eight|nine").unwrap();
     let mut pairs = Vec::new();
 
+    // Iterate over each line in the input
     for line in input.lines() {
-        let mut base10 = Vec::new();
-        let mut start = 0;
-        while let Some(mat) = regex.find(&line[start..]) {
-            // Extract the matching string. The match is relative to the current 'start',
-            // so we adjust the indices accordingly.
-            let match_str = &line[start..][mat.start()..mat.end()];
-        
-            // Log the found match for debugging.
-            println!("Found match: '{}'", match_str);
-        
-            // Check if the match is a word in the number_words map. If it is, get the corresponding number.
-            // If it's not a word, try parsing it as a digit.
-            if let Some(&num) = number_words.get(match_str) {
-                base10.push(num);
-            } else if let Ok(num) = match_str.parse::<u32>() {
-                base10.push(num);
-            }
-        
-            // Increment 'start' to continue searching the rest of the string.
-            // We add the length of the first character of the match to allow for overlapping matches.
-            // For example, in "oneight", this lets us find "one" and then "eight".
-            start += mat.start() + match_str.chars().next().map_or(0, |_| 1);
-        
-            // Log the updated start position for debugging.
-            println!("Next start position: {}", start);
-        }
-        
+        // Create a custom iterator to find all numbers in the line
+        let mut iter = NumberIterator::new(line, &regex, &number_words);
 
-        match base10.len() {
-            0 => continue,
-            1 => pairs.push((base10[0], base10[0])),
-            _ => pairs.push((base10[0], *base10.last().unwrap())),
+        // Determine the first and last numbers in the line
+        match (iter.next(), iter.last()) {
+            // If there's only one number, or no numbers, use it for both first and last
+            (Some(first), None) | (None, Some(first)) => pairs.push((first, first)),
+            // If there are at least two numbers, use the first and last ones
+            (Some(first), Some(last)) => pairs.push((first, last)),
+            // If there are no numbers, skip this line
+            _ => continue,
         }
     }
 
-    log_pairs(&pairs);
-    return Some(sum_pairs_as_digits(&pairs));
+    // Calculate and return the sum of all pairs
+    Some(sum_pairs_as_digits(&pairs))
+}
+
+// Function to sum the pairs of numbers as concatenated digits
+fn sum_pairs_as_digits(pairs: &[(u32, u32)]) -> u32 {
+    pairs
+        .iter()
+        .map(|(a, b)| {
+            // Concatenate the digits and convert to a single number
+            format!("{}{}", a, b).parse::<u32>().unwrap_or(0)
+        })
+        .sum()
+}
+
+// Function for debugging: prints the pairs of numbers
+fn _log_pairs(pairs: &[(u32, u32)]) {
+    for (index, (first, last)) in pairs.iter().enumerate() {
+        println!("Pair[{}] = ({}, {})", index, first, last);
+    }
 }
 
 #[cfg(test)]
