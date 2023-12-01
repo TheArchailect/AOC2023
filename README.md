@@ -1,4 +1,4 @@
-# 🎄 Advent of Code {year}
+# 🎄 Advent of Code 2023
 
 ## Usage
 
